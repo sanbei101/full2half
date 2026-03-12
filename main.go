@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
+	"unicode/utf8"
 )
 
 func main() {
@@ -15,21 +15,25 @@ func main() {
 
 	filePath := os.Args[1]
 
-	info, err := os.Stat(filePath)
-	if err != nil {
-		fmt.Printf("❌ 无法访问文件: %v\n", err)
-		os.Exit(1)
-	}
-
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("❌ 读取文件失败: %v\n", err)
 		os.Exit(1)
 	}
 
-	processedText := strings.Map(convertPunctuation, string(content))
+	processedContent, changed := normalizePunctuation(content)
+	if !changed {
+		fmt.Println("✅ 文件无需替换")
+		return
+	}
 
-	err = os.WriteFile(filePath, []byte(processedText), info.Mode())
+	info, err := os.Stat(filePath)
+	if err != nil {
+		fmt.Printf("❌ 无法访问文件: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = os.WriteFile(filePath, processedContent, info.Mode())
 	if err != nil {
 		fmt.Printf("❌ 写入文件失败: %v\n", err)
 		os.Exit(1)
@@ -38,75 +42,118 @@ func main() {
 	fmt.Println("✅ 文件标点符号替换完成！")
 }
 
-func convertPunctuation(r rune) rune {
-	switch r {
-	case '。', '、', '《', '》':
-		return r
+func normalizePunctuation(content []byte) ([]byte, bool) {
+	for index := 0; index < len(content); {
+		if content[index] < utf8.RuneSelf {
+			index++
+			continue
+		}
+
+		r, size := utf8.DecodeRune(content[index:])
+		converted, ok := convertPunctuation(r)
+		if !ok {
+			index += size
+			continue
+		}
+
+		processed := make([]byte, 0, len(content))
+		processed = append(processed, content[:index]...)
+		processed = appendRune(processed, converted)
+		index += size
+
+		for index < len(content) {
+			if content[index] < utf8.RuneSelf {
+				processed = append(processed, content[index])
+				index++
+				continue
+			}
+
+			r, size = utf8.DecodeRune(content[index:])
+			if converted, ok = convertPunctuation(r); ok {
+				processed = appendRune(processed, converted)
+			} else {
+				processed = append(processed, content[index:index+size]...)
+			}
+			index += size
+		}
+
+		return processed, true
 	}
+
+	return content, false
+}
+
+func appendRune(dst []byte, r rune) []byte {
+	var encoded [utf8.UTFMax]byte
+	n := utf8.EncodeRune(encoded[:], r)
+	return append(dst, encoded[:n]...)
+}
+
+func convertPunctuation(r rune) (rune, bool) {
 
 	switch r {
 	case '“', '”':
-		return '"'
+		return '"', true
 	case '‘', '’':
-		return '\''
+		return '\'', true
 	case '【':
-		return '['
+		return '[', true
 	case '】':
-		return ']'
+		return ']', true
 	case '　':
-		return ' '
+		return ' ', true
 	case '，':
-		return ','
+		return ',', true
 	case '！':
-		return '!'
+		return '!', true
 	case '？':
-		return '?'
+		return '?', true
 	case '；':
-		return ';'
+		return ';', true
 	case '：':
-		return ':'
+		return ':', true
 	case '（':
-		return '('
+		return '(', true
 	case '）':
-		return ')'
+		return ')', true
 	case '—':
-		return '-'
+		return '-', true
 	case '～':
-		return '~'
+		return '~', true
 	case '｛':
-		return '{'
+		return '{', true
 	case '｝':
-		return '}'
+		return '}', true
 	case '／':
-		return '/'
+		return '/', true
 	case '＼':
-		return '\\'
+		return '\\', true
 	case '｜':
-		return '|'
+		return '|', true
 	case '「', '」':
-		return '\''
+		return '\'', true
 	case '『', '』':
-		return '"'
+		return '"', true
 	case '＋':
-		return '+'
+		return '+', true
 	case '－':
-		return '-'
+		return '-', true
 	case '＝':
-		return '='
+		return '=', true
 	case '＜':
-		return '<'
+		return '<', true
 	case '＞':
-		return '>'
+		return '>', true
 	case '＠':
-		return '@'
+		return '@', true
 	case '＃':
-		return '#'
+		return '#', true
 	case '％':
-		return '%'
+		return '%', true
 	case '＆':
-		return '&'
+		return '&', true
 	case '＊':
-		return '*'
+		return '*', true
 	}
-	return r
+	return r, false
 }
