@@ -2,44 +2,81 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"unicode/utf8"
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("❌ 参数错误!")
-		fmt.Println("👉 用法: full2half <文件路径>")
-		os.Exit(1)
+	args := os.Args[1:]
+
+	if len(args) == 2 && args[0] == "-r" {
+		dirPath := args[1]
+		info, err := os.Stat(dirPath)
+		if err != nil {
+			fmt.Printf("❌ 无法访问目录: %v\n", err)
+			os.Exit(1)
+		}
+		if !info.IsDir() {
+			fmt.Printf("❌ 路径不是目录: %s\n", dirPath)
+			os.Exit(1)
+		}
+		err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				fmt.Printf("❌ 访问路径失败 %s: %v\n", path, err)
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			processFile(path)
+			return nil
+		})
+		if err != nil {
+			fmt.Printf("❌ 遍历目录失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
-	filePath := os.Args[1]
+	if len(args) == 1 {
+		processFile(args[0])
+		return
+	}
 
+	fmt.Println("❌ 参数错误!")
+	fmt.Println("👉 用法: full2half <文件路径>")
+	fmt.Println("👉 用法: full2half -r <目录路径>")
+	os.Exit(1)
+}
+
+func processFile(filePath string) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("❌ 读取文件失败: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
 	processedContent, changed := normalizePunctuation(content)
 	if !changed {
-		fmt.Println("✅ 文件无需替换")
+		fmt.Printf("✅ 文件无需替换: %s\n", filePath)
 		return
 	}
 
 	info, err := os.Stat(filePath)
 	if err != nil {
 		fmt.Printf("❌ 无法访问文件: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
 	err = os.WriteFile(filePath, processedContent, info.Mode())
 	if err != nil {
 		fmt.Printf("❌ 写入文件失败: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
-	fmt.Println("✅ 文件标点符号替换完成！")
+	fmt.Printf("✅ 文件标点符号替换完成: %s\n", filePath)
 }
 
 func normalizePunctuation(content []byte) ([]byte, bool) {
