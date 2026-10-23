@@ -5,6 +5,39 @@ import (
 	"testing"
 )
 
+func TestIsBinaryExtension(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{path: "main.go", want: false},
+		{path: "README.TXT", want: false},
+		{path: "image.PNG", want: true},
+		{path: "archive.tar.gz", want: true},
+		{path: "Makefile", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := isBinaryExtension(tt.path); got != tt.want {
+				t.Fatalf("isBinaryExtension(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsTextContent(t *testing.T) {
+	if !isTextContent([]byte("代码，“文本”")) {
+		t.Fatal("expected UTF-8 text to be accepted")
+	}
+	if isTextContent([]byte("text\x00with NUL")) {
+		t.Fatal("expected content with NUL to be rejected")
+	}
+	if isTextContent([]byte{0xff, 0xfe, 0xfd}) {
+		t.Fatal("expected invalid UTF-8 to be rejected")
+	}
+}
+
 func TestNormalizePunctuation(t *testing.T) {
 	tests := []struct {
 		name        string
