@@ -1,12 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 )
+
+var binaryExtensions = map[string]struct{}{
+	".7z": {}, ".a": {}, ".avi": {}, ".bin": {}, ".bmp": {}, ".bz2": {},
+	".class": {}, ".db": {}, ".dll": {}, ".dmg": {}, ".doc": {}, ".docx": {},
+	".eot": {}, ".exe": {}, ".gif": {}, ".gz": {}, ".ico": {}, ".iso": {},
+	".jar": {}, ".jpeg": {}, ".jpg": {}, ".dylib": {}, ".mov": {}, ".mp3": {},
+	".mp4": {}, ".o": {}, ".otf": {}, ".pdf": {}, ".png": {}, ".ppt": {},
+	".pptx": {}, ".pyc": {}, ".psd": {}, ".rar": {}, ".so": {}, ".sqlite": {},
+	".tar": {}, ".tif": {}, ".tiff": {}, ".ttf": {}, ".wav": {}, ".wasm": {},
+	".webm": {}, ".webp": {}, ".woff": {}, ".woff2": {}, ".xls": {}, ".xlsx": {},
+	".xz": {}, ".zst": {}, ".zip": {},
+}
 
 func main() {
 	args := os.Args[1:]
@@ -28,6 +42,9 @@ func main() {
 				return nil
 			}
 			if d.IsDir() {
+				if d.Name() == ".git" {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			processFile(path)
@@ -52,9 +69,18 @@ func main() {
 }
 
 func processFile(filePath string) {
+	if isBinaryExtension(filePath) {
+		fmt.Printf("⏭️ 跳过二进制文件: %s\n", filePath)
+		return
+	}
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("❌ 读取文件失败: %v\n", err)
+		return
+	}
+	if !isTextContent(content) {
+		fmt.Printf("⏭️ 跳过二进制文件: %s\n", filePath)
 		return
 	}
 
@@ -77,6 +103,15 @@ func processFile(filePath string) {
 	}
 
 	fmt.Printf("✅ 文件标点符号替换完成: %s\n", filePath)
+}
+
+func isBinaryExtension(filePath string) bool {
+	_, ok := binaryExtensions[strings.ToLower(filepath.Ext(filePath))]
+	return ok
+}
+
+func isTextContent(content []byte) bool {
+	return !bytes.ContainsRune(content, 0) && utf8.Valid(content)
 }
 
 func normalizePunctuation(content []byte) ([]byte, bool) {
